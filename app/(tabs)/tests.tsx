@@ -25,10 +25,8 @@ export default function TestsScreen() {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from('tests')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const fetchError = false;
+      const data = null;
 
       if (fetchError) throw fetchError;
       setTests(data || []);

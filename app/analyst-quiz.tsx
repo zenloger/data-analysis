@@ -35,13 +35,15 @@ export default function AnalystQuizScreen() {
     try {
       setLoading(true);
 
-      const [questionsResponse, typesResponse] = await Promise.all([
-        supabase
-          .from('analyst_quiz_questions')
-          .select('*')
-          .order('order_index', { ascending: true }),
-        supabase.from('analyst_types').select('*'),
-      ]);
+      // const [questionsResponse, typesResponse] = await Promise.all([
+      //   supabase
+      //     .from('analyst_quiz_questions')
+      //     .select('*')
+      //     .order('order_index', { ascending: true }),
+      //   supabase.from('analyst_types').select('*'),
+      // ]);
+      const questionsResponse = {error: null, data: null};
+      const typesResponse = {error: null, data: null};
 
       if (questionsResponse.error) throw questionsResponse.error;
       if (typesResponse.error) throw typesResponse.error;

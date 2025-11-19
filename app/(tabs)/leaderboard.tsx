@@ -34,11 +34,14 @@ export default function LeaderboardScreen() {
       setLoading(true);
       setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('total_points', { ascending: false })
-        .limit(100);
+      // const { data, error: fetchError } = await supabase
+      //   .from('profiles')
+      //   .select('*')
+      //   .order('total_points', { ascending: false })
+      //   .limit(100);
+
+      const data = null;
+      const fetchError = null;
 
       if (fetchError) throw fetchError;
       setProfiles(data || []);

@@ -28,24 +28,6 @@ export default function TabLayout() {
         },
       }}>
       <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Курсы',
-          tabBarIcon: ({ size, color }) => (
-            <BookOpen size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="assignments"
-        options={{
-          title: 'Задания',
-          tabBarIcon: ({ size, color }) => (
-            <ClipboardList size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="tests"
         options={{
           title: 'Тесты',
