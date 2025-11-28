@@ -28,20 +28,20 @@ export default function TabLayout() {
         },
       }}>
       <Tabs.Screen
-        name="tests"
-        options={{
-          title: 'Тесты',
-          tabBarIcon: ({ size, color }) => (
-            <FileCheck size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="leaderboard"
         options={{
           title: 'Рейтинг',
           tabBarIcon: ({ size, color }) => (
             <Trophy size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="tests"
+        options={{
+          title: 'Тесты',
+          tabBarIcon: ({ size, color }) => (
+            <FileCheck size={size} color={color} />
           ),
         }}
       />

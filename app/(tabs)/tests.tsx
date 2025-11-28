@@ -1,69 +1,58 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
-import { supabase } from '@/lib/supabase';
-import { Test } from '@/types/database';
 import { FileCheck, Clock, Award, ChevronRight } from 'lucide-react-native';
+import { testTopics, TestTopic, TestType } from '@/data/testTopics';
+
+type FilterValue = 'all' | TestType;
+
+const filterChips: { id: FilterValue; label: string }[] = [
+  { id: 'all', label: 'Все' },
+  { id: 'quiz', label: 'Тесты' },
+  { id: 'control', label: 'Контрольные' },
+];
 
 export default function TestsScreen() {
-  const [tests, setTests] = useState<Test[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterValue>('all');
+  const [expandedTopics, setExpandedTopics] = useState<string[]>(
+    () => (testTopics.length ? [testTopics[0].id] : [])
+  );
 
-  useEffect(() => {
-    loadTests();
+  const summary = useMemo(() => {
+    const totalQuestions = testTopics.reduce(
+      (total: number, topic: TestTopic) => total + topic.questions.length,
+      0
+    );
+
+    return {
+      totalTopics: testTopics.length,
+      totalQuestions,
+    };
   }, []);
 
-  async function loadTests() {
-    try {
-      setLoading(true);
-      setError(null);
+  const filteredTopics = useMemo<TestTopic[]>(() => {
+    if (filter === 'all') return testTopics;
+    return testTopics.filter((topic) => topic.type === filter);
+  }, [filter]);
 
-      const fetchError = false;
-      const data = null;
-
-      if (fetchError) throw fetchError;
-      setTests(data || []);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Не удалось загрузить тесты'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function getTestTypeLabel(type: string) {
+  function getTestTypeLabel(type: TestType) {
     return type === 'quiz' ? 'Тест' : 'Контрольная';
   }
 
-  function getTestTypeColor(type: string) {
+  function getTestTypeColor(type: TestType) {
     return type === 'quiz' ? '#3b82f6' : '#8b5cf6';
   }
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Загрузка тестов...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadTests}>
-          <Text style={styles.retryButtonText}>Повторить</Text>
-        </TouchableOpacity>
-      </View>
+  function toggleTopic(topicId: string) {
+    setExpandedTopics((prev) =>
+      prev.includes(topicId)
+        ? prev.filter((id) => id !== topicId)
+        : [...prev, topicId]
     );
   }
 
@@ -72,67 +61,160 @@ export default function TestsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Тесты и контрольные</Text>
         <Text style={styles.headerSubtitle}>Проверьте свои знания</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{summary.totalTopics}</Text>
+            <Text style={styles.statLabel}>Тем доступно</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{summary.totalQuestions}</Text>
+            <Text style={styles.statLabel}>Вопросов</Text>
+          </View>
+        </View>
       </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterChipsContainer}
+        style={styles.filterChipsScroll}>
+        {filterChips.map((chip) => {
+          const isActive = chip.id === filter;
+          return (
+            <TouchableOpacity
+              key={chip.id}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              activeOpacity={0.7}
+              onPress={() => setFilter(chip.id)}>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  isActive && styles.filterChipTextActive,
+                ]}>
+                {chip.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {tests.length === 0 ? (
+        {filteredTopics.length === 0 ? (
           <View style={styles.emptyState}>
             <FileCheck size={64} color="#d1d5db" />
             <Text style={styles.emptyText}>
-              Тесты пока не добавлены.{'\n'}Скоро здесь появятся проверочные
-              работы!
+              Ничего не найдено.{'\n'}Попробуйте изменить фильтры.
             </Text>
           </View>
         ) : (
-          tests.map((test) => (
-            <TouchableOpacity
-              key={test.id}
-              style={styles.testCard}
-              activeOpacity={0.7}>
-              <View style={styles.testHeader}>
-                <View
-                  style={[
-                    styles.testTypeBadge,
-                    {
-                      backgroundColor: `${getTestTypeColor(test.type)}15`,
-                    },
-                  ]}>
-                  <Text
+          filteredTopics.map((topic) => (
+            <View key={topic.id} style={styles.topicCard}>
+              <TouchableOpacity
+                style={styles.topicHeader}
+                activeOpacity={0.8}
+                onPress={() => toggleTopic(topic.id)}>
+                <View style={styles.topicHeaderLeft}>
+                  <View
                     style={[
-                      styles.testTypeText,
-                      { color: getTestTypeColor(test.type) },
+                      styles.testTypeBadge,
+                      {
+                        backgroundColor: `${getTestTypeColor(topic.type)}15`,
+                      },
                     ]}>
-                    {getTestTypeLabel(test.type)}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.testTypeText,
+                        { color: getTestTypeColor(topic.type) },
+                      ]}>
+                      {getTestTypeLabel(topic.type)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.topicTitle}>{topic.title}</Text>
+                    <Text style={styles.topicSubtitle}>{topic.subtitle}</Text>
+                  </View>
                 </View>
-              </View>
-
-              <Text style={styles.testTitle}>{test.title}</Text>
-
-              <View style={styles.testMetaRow}>
-                <View style={styles.metaItem}>
-                  <Clock size={16} color="#6b7280" />
-                  <Text style={styles.metaText}>
-                    {test.time_limit_minutes} мин
-                  </Text>
+                <View style={styles.topicHeaderRight}>
+                  <View style={styles.metaItem}>
+                    <Clock size={16} color="#6b7280" />
+                    <Text style={styles.metaText}>
+                      {topic.durationMinutes} мин
+                    </Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <Award size={16} color="#6b7280" />
+                    <Text style={styles.metaText}>
+                      {topic.maxPoints} баллов
+                    </Text>
+                  </View>
+                  <ChevronRight
+                    size={18}
+                    color="#3b82f6"
+                    style={
+                      expandedTopics.includes(topic.id)
+                        ? styles.chevronExpanded
+                        : undefined
+                    }
+                  />
                 </View>
+              </TouchableOpacity>
 
-                <View style={styles.metaItem}>
-                  <Award size={16} color="#6b7280" />
-                  <Text style={styles.metaText}>
-                    {test.max_points} баллов
-                  </Text>
+              {expandedTopics.includes(topic.id) && (
+                <View style={styles.topicBody}>
+                  {topic.questions.map((question) => (
+                    <View key={question.id} style={styles.questionCard}>
+                      <View style={styles.questionHeader}>
+                        <Text style={styles.questionOrder}>
+                          Вопрос {question.order}
+                        </Text>
+                        <View style={styles.questionDivider} />
+                      </View>
+                      <Text style={styles.questionPrompt}>
+                        {question.prompt}
+                      </Text>
+                      <View style={styles.optionsList}>
+                        {question.options.map((option) => {
+                          const isCorrect =
+                            option.id === question.correctOption;
+                          return (
+                            <View
+                              key={option.id}
+                              style={[
+                                styles.optionRow,
+                                isCorrect && styles.optionRowCorrect,
+                              ]}>
+                              <View
+                                style={[
+                                  styles.optionBubble,
+                                  isCorrect && styles.optionBubbleCorrect,
+                                ]}>
+                                <Text
+                                  style={[
+                                    styles.optionBubbleText,
+                                    isCorrect && styles.optionBubbleTextCorrect,
+                                  ]}>
+                                  {option.id.toUpperCase()}
+                                </Text>
+                              </View>
+                              <Text
+                                style={[
+                                  styles.optionText,
+                                  isCorrect && styles.optionTextCorrect,
+                                ]}>
+                                {option.text}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
                 </View>
-              </View>
-
-              <View style={styles.testFooter}>
-                <Text style={styles.startTestText}>Начать тест</Text>
-                <ChevronRight size={18} color="#3b82f6" />
-              </View>
-            </TouchableOpacity>
+              )}
+            </View>
           ))
         )}
       </ScrollView>
@@ -144,13 +226,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    padding: 20,
   },
   header: {
     backgroundColor: '#ffffff',
@@ -170,30 +245,59 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#6b7280',
   },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    padding: 16,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  statLabel: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#6b7280',
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
   },
-  testCard: {
+  topicCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  testHeader: {
+  topicHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    gap: 16,
+  },
+  topicHeaderLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  topicHeaderRight: {
+    alignItems: 'flex-end',
+    gap: 8,
   },
   testTypeBadge: {
     paddingHorizontal: 10,
@@ -204,17 +308,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  testTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  testMetaRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 12,
-  },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -223,42 +316,6 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 14,
     color: '#6b7280',
-  },
-  testFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  startTestText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3b82f6',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#dc2626',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -271,5 +328,126 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  filterChipsScroll: {
+    maxHeight: 60,
+  },
+  filterChipsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+  },
+  filterChipActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  filterChipText: {
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#ffffff',
+  },
+  topicTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  topicSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  chevronExpanded: {
+    transform: [{ rotate: '90deg' }],
+  },
+  topicBody: {
+    marginTop: 18,
+    gap: 12,
+  },
+  questionCard: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#f9fafb',
+  },
+  questionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  questionOrder: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3b82f6',
+    textTransform: 'uppercase',
+  },
+  questionDivider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  questionPrompt: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  optionsList: {
+    gap: 8,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  optionRowCorrect: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#dbeafe',
+  },
+  optionBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  optionBubbleCorrect: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#3b82f6',
+  },
+  optionBubbleText: {
+    fontWeight: '700',
+    color: '#6b7280',
+  },
+  optionBubbleTextCorrect: {
+    color: '#ffffff',
+  },
+  optionText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+  },
+  optionTextCorrect: {
+    fontWeight: '600',
+    color: '#1d4ed8',
   },
 });
