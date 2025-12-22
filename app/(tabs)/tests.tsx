@@ -6,8 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { FileCheck, Clock, Award, ChevronRight } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { FileCheck, Clock, Award, ChevronRight, Play, CheckCircle } from 'lucide-react-native';
 import { testTopics, TestTopic, TestType } from '@/data/testTopics';
+import { useTestResults, TestResult } from '@/contexts/TestResultsContext';
 
 type FilterValue = 'all' | TestType;
 
@@ -18,22 +20,41 @@ const filterChips: { id: FilterValue; label: string }[] = [
 ];
 
 export default function TestsScreen() {
+  const router = useRouter();
+  const { results, getResult } = useTestResults();
   const [filter, setFilter] = useState<FilterValue>('all');
   const [expandedTopics, setExpandedTopics] = useState<string[]>(
     () => (testTopics.length ? [testTopics[0].id] : [])
   );
+
+  function getResultColor(percentage: number): string {
+    if (percentage >= 90) return '#10b981'; // green
+    if (percentage >= 70) return '#3b82f6'; // blue
+    if (percentage >= 50) return '#f59e0b'; // amber
+    return '#ef4444'; // red
+  }
+
+  function getResultBgColor(percentage: number): string {
+    if (percentage >= 90) return '#dcfce7';
+    if (percentage >= 70) return '#dbeafe';
+    if (percentage >= 50) return '#fef3c7';
+    return '#fee2e2';
+  }
 
   const summary = useMemo(() => {
     const totalQuestions = testTopics.reduce(
       (total: number, topic: TestTopic) => total + topic.questions.length,
       0
     );
+    
+    const completedTopics = Object.keys(results).length;
 
     return {
       totalTopics: testTopics.length,
       totalQuestions,
+      completedTopics,
     };
-  }, []);
+  }, [results]);
 
   const filteredTopics = useMemo<TestTopic[]>(() => {
     if (filter === 'all') return testTopics;
@@ -70,7 +91,19 @@ export default function TestsScreen() {
             <Text style={styles.statValue}>{summary.totalQuestions}</Text>
             <Text style={styles.statLabel}>Вопросов</Text>
           </View>
+          <View style={[styles.statCard, styles.statCardCompleted]}>
+            <Text style={styles.statValueCompleted}>{summary.completedTopics}</Text>
+            <Text style={styles.statLabel}>Пройдено</Text>
+          </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.startQuizButton}
+          activeOpacity={0.8}
+          onPress={() => router.push('/topic-quiz')}>
+          <Play size={20} color="#ffffff" />
+          <Text style={styles.startQuizButtonText}>Начать тестирование</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -110,8 +143,37 @@ export default function TestsScreen() {
             </Text>
           </View>
         ) : (
-          filteredTopics.map((topic) => (
-            <View key={topic.id} style={styles.topicCard}>
+          filteredTopics.map((topic) => {
+            const topicResult = getResult(topic.id);
+            const hasResult = !!topicResult;
+            
+            return (
+            <View 
+              key={topic.id} 
+              style={[
+                styles.topicCard,
+                hasResult && {
+                  borderColor: getResultColor(topicResult.percentage),
+                  borderWidth: 2,
+                },
+              ]}>
+              {hasResult && (
+                <View 
+                  style={[
+                    styles.resultBadge, 
+                    { backgroundColor: getResultBgColor(topicResult.percentage) }
+                  ]}>
+                  <CheckCircle size={16} color={getResultColor(topicResult.percentage)} />
+                  <Text 
+                    style={[
+                      styles.resultBadgeText, 
+                      { color: getResultColor(topicResult.percentage) }
+                    ]}>
+                    {topicResult.correctCount}/{topicResult.totalQuestions} ({topicResult.percentage}%)
+                  </Text>
+                </View>
+              )}
+              
               <TouchableOpacity
                 style={styles.topicHeader}
                 activeOpacity={0.8}
@@ -160,6 +222,22 @@ export default function TestsScreen() {
                     }
                   />
                 </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.startTopicButton,
+                  hasResult && styles.startTopicButtonCompleted,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => router.push(`/topic-quiz?topicId=${topic.id}`)}>
+                <Play size={16} color={hasResult ? '#10b981' : '#3b82f6'} />
+                <Text style={[
+                  styles.startTopicButtonText,
+                  hasResult && styles.startTopicButtonTextCompleted,
+                ]}>
+                  {hasResult ? 'Пройти заново' : 'Начать тест'}
+                </Text>
               </TouchableOpacity>
 
               {expandedTopics.includes(topic.id) && (
@@ -215,7 +293,8 @@ export default function TestsScreen() {
                 </View>
               )}
             </View>
-          ))
+          );
+          })
         )}
       </ScrollView>
     </View>
@@ -266,6 +345,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
   },
+  statCardCompleted: {
+    backgroundColor: '#dcfce7',
+  },
+  statValueCompleted: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  startQuizButton: {
+    marginTop: 16,
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  startQuizButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
   scrollView: {
     flex: 1,
   },
@@ -284,6 +386,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+  },
+  resultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  resultBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   topicHeader: {
     flexDirection: 'row',
@@ -368,6 +484,30 @@ const styles = StyleSheet.create({
   },
   chevronExpanded: {
     transform: [{ rotate: '90deg' }],
+  },
+  startTopicButton: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  startTopicButtonCompleted: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+  },
+  startTopicButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  startTopicButtonTextCompleted: {
+    color: '#10b981',
   },
   topicBody: {
     marginTop: 18,
