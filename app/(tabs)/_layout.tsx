@@ -37,6 +37,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="lections"
+        options={{
+          title: 'Лекции',
+          tabBarIcon: ({ size, color }) => (
+            <BookOpen size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="tests"
         options={{
           title: 'Тесты',
