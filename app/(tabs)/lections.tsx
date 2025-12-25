@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { BookOpen, ChevronRight, List, ArrowLeft } from 'lucide-react-native';
+import { BookOpen, ChevronRight, List, ArrowLeft, CheckCircle } from 'lucide-react-native';
 import { lectionTopics, LectionHeader } from '@/data/lections';
 
 type ViewMode = 'topics' | 'sections' | 'content';
@@ -15,6 +15,9 @@ export default function LectionsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('topics');
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [selectedHeader, setSelectedHeader] = useState<LectionHeader | null>(null);
+  const [readLections, setReadLections] = useState<Set<string>>(new Set());
+  const scrollViewRef = useRef<ScrollView>(null);
+  const headerPositions = useRef<{ [key: string]: number }>({});
 
   const currentTopic = useMemo(() => {
     return lectionTopics.find((topic) => topic.id === selectedTopic);
@@ -23,11 +26,21 @@ export default function LectionsScreen() {
   const handleTopicPress = (topicId: string) => {
     setSelectedTopic(topicId);
     setViewMode('sections');
+    // Очищаем позиции при смене темы
+    headerPositions.current = {};
   };
 
   const handleHeaderPress = (header: LectionHeader) => {
-    setSelectedHeader(header);
-    setViewMode('content');
+    const position = headerPositions.current[header.id];
+    if (position !== undefined && scrollViewRef.current) {
+      // Учитываем padding contentContainer (16) и небольшой отступ сверху (20)
+      scrollViewRef.current.scrollTo({ y: Math.max(0, position - 20), animated: true });
+    }
+  };
+
+  const handleHeaderLayout = (headerId: string, event: any) => {
+    const { y } = event.nativeEvent.layout;
+    headerPositions.current[headerId] = y;
   };
 
   const handleBack = () => {
@@ -38,6 +51,18 @@ export default function LectionsScreen() {
       setViewMode('topics');
       setSelectedTopic(null);
     }
+  };
+
+  const handleMarkAsRead = (headerId: string) => {
+    setReadLections((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(headerId);
+      return newSet;
+    });
+  };
+
+  const isLectionRead = (headerId: string) => {
+    return readLections.has(headerId);
   };
 
   return (
@@ -69,78 +94,159 @@ export default function LectionsScreen() {
             style={styles.topicsList}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.topicsListContent}>
-            {lectionTopics.map((topic) => (
-              <TouchableOpacity
-                key={topic.id}
-                style={styles.topicCard}
-                activeOpacity={0.7}
-                onPress={() => handleTopicPress(topic.id)}>
-                <View style={styles.topicCardHeader}>
-                  <View style={styles.topicCardIcon}>
-                    <BookOpen size={24} color="#3b82f6" />
+            {lectionTopics.map((topic) => {
+              const readCount = topic.headers.filter((h) => isLectionRead(h.id)).length;
+              const allRead = readCount === topic.headers.length && topic.headers.length > 0;
+              return (
+                <TouchableOpacity
+                  key={topic.id}
+                  style={styles.topicCard}
+                  activeOpacity={0.7}
+                  onPress={() => handleTopicPress(topic.id)}>
+                  <View style={styles.topicCardHeader}>
+                    <View style={styles.topicCardIcon}>
+                      <BookOpen size={24} color="#3b82f6" />
+                    </View>
+                    <View style={styles.topicCardContent}>
+                      <Text style={styles.topicCardTitle}>{topic.title}</Text>
+                      <View style={styles.topicCardInfo}>
+                        <Text style={styles.topicCardCount}>
+                          {topic.headers.length} разделов
+                        </Text>
+                        {allRead && (
+                          <View style={styles.readBadge}>
+                            <CheckCircle size={14} color="#10b981" />
+                            <Text style={styles.readBadgeText}>Прочитано</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <ChevronRight size={20} color="#9ca3af" />
                   </View>
-                  <View style={styles.topicCardContent}>
-                    <Text style={styles.topicCardTitle}>{topic.title}</Text>
-                    <Text style={styles.topicCardCount}>
-                      {topic.headers.length} разделов
-                    </Text>
-                  </View>
-                  <ChevronRight size={20} color="#9ca3af" />
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         )}
 
         {viewMode === 'sections' && currentTopic && (
           <ScrollView
+            ref={scrollViewRef}
             style={styles.sectionsList}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.sectionsListContent}>
-            {currentTopic.headers.map((header) => (
-              <TouchableOpacity
-                key={header.id}
-                style={styles.sectionCard}
-                activeOpacity={0.7}
-                onPress={() => handleHeaderPress(header)}>
-                <View style={styles.sectionCardHeader}>
-                  <View style={styles.sectionCardNumber}>
-                    <Text style={styles.sectionCardNumberText}>
-                      {header.order}
+            {/* Кнопки выбора разделов */}
+            {currentTopic.headers.map((header) => {
+              const isRead = isLectionRead(header.id);
+              return (
+                <TouchableOpacity
+                  key={header.id}
+                  style={[styles.sectionCard, isRead && styles.sectionCardRead]}
+                  activeOpacity={0.7}
+                  onPress={() => handleHeaderPress(header)}>
+                  <View style={styles.sectionCardHeader}>
+                    <View style={[styles.sectionCardNumber, isRead && styles.sectionCardNumberRead]}>
+                      <Text style={[styles.sectionCardNumberText, isRead && styles.sectionCardNumberTextRead]}>
+                        {header.order}
+                      </Text>
+                    </View>
+                    <View style={styles.sectionCardContent}>
+                      <Text style={styles.sectionCardTitle}>{header.title}</Text>
+                    </View>
+                    {isRead ? (
+                      <CheckCircle size={20} color="#10b981" />
+                    ) : (
+                      <ChevronRight size={20} color="#9ca3af" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            
+            {/* Сами лекции и заголовки разделов */}
+            {currentTopic.headers.map((header) => {
+              const isRead = isLectionRead(header.id);
+              return (
+                <View 
+                  key={`content-${header.id}`} 
+                  onLayout={(event) => handleHeaderLayout(header.id, event)}
+                  style={styles.sectionContent}>
+                  <View style={styles.contentHeader}>
+                    <View style={styles.contentHeaderNumber}>
+                      <Text style={styles.contentHeaderNumberText}>
+                        {header.order}
+                      </Text>
+                    </View>
+                    <Text style={styles.contentHeaderTitle}>
+                      {header.title}
                     </Text>
                   </View>
-                  <View style={styles.sectionCardContent}>
-                    <Text style={styles.sectionCardTitle}>{header.title}</Text>
+                  <View style={styles.contentText}>
+                    <Text style={styles.contentTextBody}>
+                      {header.content}
+                    </Text>
                   </View>
-                  <ChevronRight size={20} color="#9ca3af" />
+                  {!isRead && (
+                    <TouchableOpacity
+                      style={styles.readButton}
+                      activeOpacity={0.7}
+                      onPress={() => handleMarkAsRead(header.id)}>
+                      <CheckCircle size={20} color="#ffffff" />
+                      <Text style={styles.readButtonText}>Прочитано</Text>
+                    </TouchableOpacity>
+                  )}
+                  {isRead && (
+                    <View style={styles.readIndicator}>
+                      <CheckCircle size={20} color="#10b981" />
+                      <Text style={styles.readIndicatorText}>Прочитано</Text>
+                    </View>
+                  )}
                 </View>
-              </TouchableOpacity>
-            ))}
+              );
+            })}
           </ScrollView>
         )}
 
-        {viewMode === 'content' && selectedHeader && (
-          <ScrollView
-            style={styles.contentView}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.contentViewContent}>
-            <View style={styles.contentHeader}>
-              <View style={styles.contentHeaderNumber}>
-                <Text style={styles.contentHeaderNumberText}>
-                  {selectedHeader.order}
+        {viewMode === 'content' && selectedHeader && (() => {
+          const isRead = isLectionRead(selectedHeader.id);
+          return (
+            <ScrollView
+              style={styles.contentView}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.contentViewContent}>
+              <View style={styles.contentHeader}>
+                <View style={styles.contentHeaderNumber}>
+                  <Text style={styles.contentHeaderNumberText}>
+                    {selectedHeader.order}
+                  </Text>
+                </View>
+                <Text style={styles.contentHeaderTitle}>
+                  {selectedHeader.title}
                 </Text>
               </View>
-              <Text style={styles.contentHeaderTitle}>
-                {selectedHeader.title}
-              </Text>
-            </View>
-            <View style={styles.contentText}>
-              <Text style={styles.contentTextBody}>
-                {selectedHeader.content}
-              </Text>
-            </View>
-          </ScrollView>
-        )}
+              <View style={styles.contentText}>
+                <Text style={styles.contentTextBody}>
+                  {selectedHeader.content}
+                </Text>
+              </View>
+              {!isRead && (
+                <TouchableOpacity
+                  style={styles.readButton}
+                  activeOpacity={0.7}
+                  onPress={() => handleMarkAsRead(selectedHeader.id)}>
+                  <CheckCircle size={20} color="#ffffff" />
+                  <Text style={styles.readButtonText}>Прочитано</Text>
+                </TouchableOpacity>
+              )}
+              {isRead && (
+                <View style={styles.readIndicator}>
+                  <CheckCircle size={20} color="#10b981" />
+                  <Text style={styles.readIndicatorText}>Прочитано</Text>
+                </View>
+              )}
+            </ScrollView>
+          );
+        })()}
       </View>
     </View>
   );
@@ -229,6 +335,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
   },
+  topicCardInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  readBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  readBadgeText: {
+    fontSize: 11,
+    color: '#10b981',
+    fontWeight: '600',
+  },
   sectionsList: {
     flex: 1,
   },
@@ -276,6 +401,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     lineHeight: 22,
+  },
+  sectionCardRead: {
+    borderColor: '#10b981',
+    backgroundColor: '#f0fdf4',
+  },
+  sectionCardNumberRead: {
+    backgroundColor: '#10b981',
+    borderColor: '#059669',
+  },
+  sectionCardNumberTextRead: {
+    color: '#ffffff',
+  },
+  sectionContent: {
+    marginTop: 24,
+    marginBottom: 8,
   },
   contentView: {
     flex: 1,
@@ -334,6 +474,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#374151',
     lineHeight: 24,
+    textAlign: 'justify',
+  },
+  readButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#3b82f6',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 20,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  readButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  readIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#d1fae5',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  readIndicatorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10b981',
   },
 });
 
